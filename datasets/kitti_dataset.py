@@ -16,6 +16,7 @@ from torchvision import transforms
 
 from kitti_utils import generate_depth_map
 from .mono_dataset import MonoDataset
+from PIL import Image
 
 
 class KITTIDataset(MonoDataset):
@@ -177,6 +178,7 @@ class ScanNetDataset(MonoDataset):
 
         for i in self.frame_idxs:
             inputs[("color", i, -1)] = self.get_color(folder, frame_index + i, None, do_flip)
+            inputs[("bev", i)] = self.to_tensor(self.get_bev(folder, frame_index + i, do_flip))/255.0
 
         # adjusting intrinsics to match each scale in the pyramid
         K = self.get_K(folder, np.array(inputs[("color", 0, -1)]).shape)
@@ -252,6 +254,21 @@ class ScanNetDataset(MonoDataset):
             color = color.transpose(pil.FLIP_LEFT_RIGHT)
 
         return color
+
+    def get_bev(self, folder, frame_index, do_flip):
+        image_path = os.path.join(
+            self.data_path,
+            "bev",
+            folder,
+            "{}.png".format(frame_index))
+
+        with open(image_path, 'rb') as f:
+            with Image.open(f) as img:
+                bev = img.convert('L')
+        if do_flip:
+            bev = bev.transpose(pil.FLIP_LEFT_RIGHT)
+
+        return bev
 
     def get_depth(self, folder, frame_index, side, do_flip):
         depth_path = os.path.join(
