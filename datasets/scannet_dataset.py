@@ -109,6 +109,8 @@ class ScanNetDataset(MonoDataset):
         return intrinsics
 
     def check_depth(self):
+        if len(self.filenames) == 0:
+            return False
         line = self.filenames[0].split()
         folder = line[0]
         frame_index = int(line[1])

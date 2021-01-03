@@ -135,10 +135,15 @@ class Trainer:
         val_dataset = self.dataset(
             self.opt.data_path, val_filenames, self.opt.height, self.opt.width,
             self.opt.frame_ids, 4, is_train=False, img_ext=img_ext)
-        self.val_loader = DataLoader(
-            val_dataset, self.opt.batch_size, True,
-            num_workers=self.opt.num_workers, pin_memory=True, drop_last=True)
-        self.val_iter = iter(self.val_loader)
+
+        if len(val_dataset) == 0:
+            self.val_loader = None
+            self.val_iter = None
+        else:
+            self.val_loader = DataLoader(
+                val_dataset, self.opt.batch_size, True,
+                num_workers=self.opt.num_workers, pin_memory=True, drop_last=True)
+            self.val_iter = iter(self.val_loader)
 
         self.writers = {}
         for mode in ["train", "val"]:
@@ -329,6 +334,8 @@ class Trainer:
     def val(self):
         """Validate the model on a single minibatch
         """
+        if self.val_loader is None:
+            return
         self.set_eval()
         try:
             inputs = self.val_iter.next()
