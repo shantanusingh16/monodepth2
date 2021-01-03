@@ -159,6 +159,7 @@ class MonoDataset(data.Dataset):
                 inputs[("color", i, -1)] = self.get_color(folder, frame_index, other_side, do_flip)
             else:
                 inputs[("color", i, -1)] = self.get_color(folder, frame_index + i, side, do_flip)
+                # inputs[("pose", i)] = torch.from_numpy(self.get_pose(folder, frame_index + i, do_flip))
 
         # adjusting intrinsics to match each scale in the pyramid
         for scale in range(self.num_scales):
@@ -207,3 +208,6 @@ class MonoDataset(data.Dataset):
 
     def get_depth(self, folder, frame_index, side, do_flip):
         raise NotImplementedError
+
+    def get_pose(self, folder, frame_index, do_flip):
+        return np.eye(4, dtype=np.float32)
