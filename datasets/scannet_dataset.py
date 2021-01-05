@@ -104,8 +104,8 @@ class ScanNetDataset(MonoDataset):
             intrinsics = f.readlines()
 
         intrinsics = np.array([i.strip('\n').split() for i in intrinsics]).astype(np.float32)
-        intrinsics[0, :] = img_shape[0]
-        intrinsics[1, :] = img_shape[1]
+        intrinsics[0, :] /= img_shape[1]
+        intrinsics[1, :] /= img_shape[0]
         return intrinsics
 
     def check_depth(self):
