@@ -13,6 +13,9 @@ from options import MonodepthOptions
 import datasets
 import networks
 
+import matplotlib as mpl
+import matplotlib.cm as cm
+
 cv2.setNumThreads(0)  # This speeds up evaluation 5x on our unix systems (OpenCV 3.3.1)
 
 
@@ -74,16 +77,20 @@ def evaluate(opt):
 
         print("-> Loading weights from {}".format(opt.load_weights_folder))
 
-        filenames = readlines(os.path.join(splits_dir, opt.eval_split, "test_files.txt"))
+        filenames = readlines(os.path.join(splits_dir, opt.eval_split, "val_files.txt"))[:100]
         encoder_path = os.path.join(opt.load_weights_folder, "encoder.pth")
         decoder_path = os.path.join(opt.load_weights_folder, "depth.pth")
 
         encoder_dict = torch.load(encoder_path)
 
-        dataset = datasets.KITTIRAWDataset(opt.data_path, filenames,
-                                           encoder_dict['height'], encoder_dict['width'],
-                                           [0], 4, is_train=False)
-        dataloader = DataLoader(dataset, 16, shuffle=False, num_workers=opt.num_workers,
+        datasets_dict = {"kitti": datasets.KITTIRAWDataset,
+                         "kitti_odom": datasets.KITTIOdomDataset,
+                         "scannet": datasets.ScanNetDataset}
+
+        eval_dataset = datasets_dict[opt.dataset](opt.data_path, filenames,
+                                             encoder_dict['height'], encoder_dict['width'],
+                                             [0], 4, is_train=False)
+        dataloader = DataLoader(eval_dataset, opt.batch_size, shuffle=False, num_workers=opt.num_workers,
                                 pin_memory=True, drop_last=False)
 
         encoder = networks.ResnetEncoder(opt.num_layers, False)
@@ -99,6 +106,7 @@ def evaluate(opt):
         depth_decoder.eval()
 
         pred_disps = []
+        filepaths = []
 
         print("-> Computing predictions with size {}x{}".format(
             encoder_dict['width'], encoder_dict['height']))
@@ -106,6 +114,7 @@ def evaluate(opt):
         with torch.no_grad():
             for data in dataloader:
                 input_color = data[("color", 0, 0)].cuda()
+                filepaths.extend(data["filepath"])
 
                 if opt.post_process:
                     # Post-processed results require each image to have two forward passes
@@ -125,9 +134,26 @@ def evaluate(opt):
         pred_disps = np.concatenate(pred_disps)
 
     else:
-        # Load predictions from file
-        print("-> Loading predictions from {}".format(opt.ext_disp_to_eval))
-        pred_disps = np.load(opt.ext_disp_to_eval)
+        # Load predictions from root folder
+        root_dir = opt.ext_disp_to_eval
+        print("-> Loading predictions from {}".format(root_dir))
+        # pred_disps = np.load(opt.ext_disp_to_eval)
+        pred_disps = []
+        filepaths = readlines(os.path.join(splits_dir, opt.eval_split, "val_files.txt"))
+        for filepath in filepaths:
+            if opt.dataset == 'scannet':
+                folder, fileidx = filepath.split()
+                tgt_dir = os.path.join(root_dir, folder)
+                filename = str(fileidx)
+            else:
+                folder, fileidx, side = filepath.split()
+                side_map = {"2": 2, "3": 3, "l": 2, "r": 3}
+                tgt_dir = os.path.join(root_dir, folder, "image_0{}".format(side_map[side]))
+                filename = "{:010d}".format(fileidx)
+
+            pred_disps.append(np.load(os.path.join(tgt_dir, "{}.npy".format(filename))))
+
+        pred_disps = np.array(pred_disps)
 
         if opt.eval_eigen_to_benchmark:
             eigen_to_benchmark_ids = np.load(
@@ -136,10 +162,35 @@ def evaluate(opt):
             pred_disps = pred_disps[eigen_to_benchmark_ids]
 
     if opt.save_pred_disps:
-        output_path = os.path.join(
-            opt.load_weights_folder, "disps_{}_split.npy".format(opt.eval_split))
-        print("-> Saving predicted disparities to ", output_path)
-        np.save(output_path, pred_disps)
+        save_dir = os.path.join(opt.load_weights_folder, "predictions")
+        print("-> Saving out predictions to {}".format(save_dir))
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+
+        for idx in range(len(pred_disps)):
+            if opt.dataset == 'scannet':
+                folder, fileidx = filepaths[idx].split()
+                tgt_dir = os.path.join(save_dir, folder)
+                filename = str(fileidx)
+                depth_shape = (640, 480)
+            else:
+                folder, fileidx, side = filepaths[idx].split()
+                side_map = {"2": 2, "3": 3, "l": 2, "r": 3}
+                tgt_dir = os.path.join(save_dir, folder, "image_0{}".format(side_map[side]))
+                filename = "{:010d}".format(fileidx)
+                depth_shape = (1216, 352)
+
+            os.makedirs(tgt_dir, exist_ok=True)
+            np.save(os.path.join(tgt_dir, "{}.npy".format(filename)), pred_disps[idx])
+            disp_resized = cv2.resize(pred_disps[idx], depth_shape)
+            depth = opt.pred_depth_scale_factor / disp_resized
+            depth = np.clip(depth, opt.min_depth, opt.max_depth)
+            # depth = np.uint16(depth * 256)
+            normalizer = mpl.colors.Normalize(vmin=opt.min_depth, vmax=opt.max_depth)
+            mapper = cm.ScalarMappable(norm=normalizer, cmap='magma')
+            colormapped_im = (mapper.to_rgba(depth)[:, :, :3] * 255).astype(np.uint8)
+            save_path = os.path.join(tgt_dir, "{}.png".format(filename))
+            cv2.imwrite(save_path, colormapped_im)
 
     if opt.no_eval:
         print("-> Evaluation disabled. Done.")
@@ -162,8 +213,17 @@ def evaluate(opt):
         print("-> No ground truth is available for the KITTI benchmark, so not evaluating. Done.")
         quit()
 
-    gt_path = os.path.join(splits_dir, opt.eval_split, "gt_depths.npz")
-    gt_depths = np.load(gt_path, fix_imports=True, encoding='latin1')["data"]
+    if opt.dataset == 'scannet':
+        gt_depths = []
+        for filepath in filepaths:
+            folder, fileidx = filepath.split()
+            tgt_dir = os.path.join(opt.data_path, folder)
+            filename = str(fileidx)
+            gt_depths.append(np.load(os.path.join(tgt_dir, "{}.npy".format(filename))))
+        gt_depths = np.array(gt_depths)
+    else:
+        gt_path = os.path.join(splits_dir, opt.eval_split, "gt_depths.npz")
+        gt_depths = np.load(gt_path, fix_imports=True, encoding='latin1')["data"]
 
     print("-> Evaluating")
 

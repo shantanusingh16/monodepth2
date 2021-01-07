@@ -1,11 +1,13 @@
 import os
 import numpy as np
 
-data_dir = '/scratch/shantanu/Pytorch-UNet/data/imgs'
+np.random.seed(0)
+
+data_dir = '/mnt/storage/Projects/Pytorch-UNet/data/imgs'
 
 scene_folders = list(set([i.split('_')[0] for i in os.listdir(data_dir)]))
 np.random.shuffle(scene_folders)
-train_size = np.ceil(len(scene_folders) * 0.7).astype(int)
+train_size = np.floor(len(scene_folders) * 0.7).astype(int)
 train_folders = scene_folders[:train_size]
 val_folders = scene_folders[train_size:]
 
