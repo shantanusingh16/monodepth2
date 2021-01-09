@@ -185,8 +185,8 @@ def evaluate(opt):
             disp_resized = cv2.resize(pred_disps[idx], depth_shape)
             depth = opt.pred_depth_scale_factor / disp_resized
             depth = np.clip(depth, opt.min_depth, opt.max_depth)
-            # depth = np.uint16(depth * 256)
-            normalizer = mpl.colors.Normalize(vmin=opt.min_depth, vmax=opt.max_depth)
+            vmax = np.percentile(depth, 95)
+            normalizer = mpl.colors.Normalize(vmin=opt.min_depth, vmax=vmax)
             mapper = cm.ScalarMappable(norm=normalizer, cmap='magma')
             colormapped_im = (mapper.to_rgba(depth)[:, :, :3] * 255).astype(np.uint8)
             save_path = os.path.join(tgt_dir, "{}.png".format(filename))
