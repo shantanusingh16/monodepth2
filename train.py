@@ -6,7 +6,7 @@
 
 from __future__ import absolute_import, division, print_function
 
-from trainer_w_gtpose import Trainer
+from trainer import Trainer
 from options import MonodepthOptions
 
 options = MonodepthOptions()
