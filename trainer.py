@@ -235,8 +235,7 @@ class Trainer:
         """Pass a minibatch through the network and generate images and losses
         """
         for key, ipt in inputs.items():
-            if torch.is_tensor(ipt):
-                inputs[key] = ipt.to(self.device)
+            inputs[key] = ipt.to(self.device)
 
         if self.opt.pose_model_type == "shared":
             # If we are using a shared encoder for both depth and pose (as advocated
