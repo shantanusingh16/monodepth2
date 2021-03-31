@@ -11,6 +11,7 @@ from torchvision import transforms
 from kitti_utils import generate_depth_map
 from .mono_dataset import MonoDataset
 from PIL import Image
+from scipy.spatial.transform import Rotation
 
 
 class HabitatDataset(MonoDataset):
@@ -141,12 +142,17 @@ class HabitatDataset(MonoDataset):
             "0/pose",
             "{}.npy".format(frame_index))
 
-        pose = np.load(pose_path).astype(np.float32)
+        pose = np.load(pose_path, allow_pickle=True).tolist()
+
+        T = np.eye(4)
+        rot = pose['rotation']
+        T[:3, :3] = Rotation.from_quat([rot.x, rot.y, rot.z, rot.w]).as_matrix()
+        T[:3, 3] = pose['position']
 
         if do_flip:
             pass #todo implement flip for pose
 
-        return pose
+        return T
 
     def get_depth(self, folder, frame_index, side, do_flip):
         depth_path = os.path.join(
