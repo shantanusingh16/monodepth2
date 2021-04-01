@@ -16,6 +16,12 @@ import networks
 import matplotlib as mpl
 import matplotlib.cm as cm
 
+from PIL import Image
+
+import warnings
+
+warnings.filterwarnings('ignore')
+
 cv2.setNumThreads(0)  # This speeds up evaluation 5x on our unix systems (OpenCV 3.3.1)
 
 
@@ -220,6 +226,16 @@ def evaluate(opt):
             tgt_dir = os.path.join(opt.data_path, folder)
             filename = str(fileidx)
             gt_depths.append(np.load(os.path.join(tgt_dir, "{}.npy".format(filename))))
+        gt_depths = np.array(gt_depths)
+    elif opt.dataset == 'habitat':
+        gt_depths = []
+        for filepath in filepaths:
+            folder, fileidx = filepath.split()
+            tgt_dir = os.path.join(opt.data_path, folder)
+            filename = str(fileidx)
+            tgt_path = os.path.join(tgt_dir, "0", "left_depth", "{}.png".format(filename))
+            depth_arr = np.array(Image.open(tgt_path)).astype(np.float32) / 1000
+            gt_depths.append(depth_arr)
         gt_depths = np.array(gt_depths)
     else:
         gt_path = os.path.join(splits_dir, opt.eval_split, "gt_depths.npz")
