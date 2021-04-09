@@ -91,7 +91,8 @@ def evaluate(opt):
 
         datasets_dict = {"kitti": datasets.KITTIRAWDataset,
                          "kitti_odom": datasets.KITTIOdomDataset,
-                         "scannet": datasets.ScanNetDataset}
+                         "scannet": datasets.ScanNetDataset,
+                         "habitat": datasets.HabitatDataset}
 
         eval_dataset = datasets_dict[opt.dataset](opt.data_path, filenames,
                                              encoder_dict['height'], encoder_dict['width'],
@@ -147,7 +148,7 @@ def evaluate(opt):
         pred_disps = []
         filepaths = readlines(os.path.join(splits_dir, opt.eval_split, "val_files.txt"))
         for filepath in filepaths:
-            if opt.dataset == 'scannet':
+            if opt.dataset == 'scannet' or opt.dataset == 'habitat':
                 folder, fileidx = filepath.split()
                 tgt_dir = os.path.join(root_dir, folder)
                 filename = str(fileidx)
@@ -174,7 +175,7 @@ def evaluate(opt):
             os.makedirs(save_dir)
 
         for idx in range(len(pred_disps)):
-            if opt.dataset == 'scannet':
+            if opt.dataset == 'scannet' or opt.dataset == 'habitat':
                 folder, fileidx = filepaths[idx].split()
                 tgt_dir = os.path.join(save_dir, folder)
                 filename = str(fileidx)
